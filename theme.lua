@@ -1,27 +1,31 @@
--- LuxLib: Brutalist acrylic UI engine for Roblox
+-- LuxLib: Brutalist acrylic UI engine with full-spectrum color picker and dynamic blur
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
-local CoreGui = game:GetService("CoreGui")
+local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
 
 local LuxLib = {}
 LuxLib.__index = LuxLib
 
-local TWEEN_FAST = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-local TWEEN_SMOOTH = TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+local TWEEN_SNAP = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local TWEEN_FAST = TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+local TWEEN_SMOOTH = TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+local TWEEN_BOUNCE = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 
 local Theme = {
-	Void = Color3.fromRGB(8, 8, 10),
-	Surface = Color3.fromRGB(14, 14, 18),
-	Element = Color3.fromRGB(20, 20, 26),
-	ElementHover = Color3.fromRGB(28, 28, 36),
-	Border = Color3.fromRGB(38, 38, 48),
-	BorderLight = Color3.fromRGB(60, 60, 75),
+	Void = Color3.fromRGB(6, 6, 8),
+	Surface = Color3.fromRGB(12, 12, 16),
+	Element = Color3.fromRGB(18, 18, 24),
+	ElementHover = Color3.fromRGB(26, 26, 34),
+	ElementActive = Color3.fromRGB(32, 32, 42),
+	Border = Color3.fromRGB(36, 36, 46),
+	BorderLight = Color3.fromRGB(70, 70, 88),
+	BorderHighlight = Color3.fromRGB(255, 255, 255),
 	Text = Color3.fromRGB(245, 245, 250),
-	TextMuted = Color3.fromRGB(130, 130, 145),
+	TextMuted = Color3.fromRGB(125, 125, 140),
 	Accent = Color3.fromRGB(255, 255, 255),
-	AccentGlow = Color3.fromRGB(59, 130, 246),
-	Danger = Color3.fromRGB(244, 63, 94)
+	AccentDim = Color3.fromRGB(180, 180, 195)
 }
 
 local function getGuiHost()
@@ -78,21 +82,24 @@ local function makeDraggable(dragHandle, targetFrame)
 	UserInputService.InputChanged:Connect(function(input)
 		if input == dragInput and dragging then
 			local delta = input.Position - mousePos
-			targetFrame.Position = UDim2.new(
-				framePos.X.Scale,
-				framePos.X.Offset + delta.X,
-				framePos.Y.Scale,
-				framePos.Y.Offset + delta.Y
-			)
+			tween(targetFrame, TWEEN_SNAP, {
+				Position = UDim2.new(
+					framePos.X.Scale,
+					framePos.X.Offset + delta.X,
+					framePos.Y.Scale,
+					framePos.Y.Offset + delta.Y
+				)
+			})
 		end
 	end)
 end
 
 function LuxLib:CreateWindow(config)
 	config = config or {}
-	local titleText = config.Title or "LUX // BRUTAL"
-	local subText = config.Subtitle or "SYSTEM INTERFACE"
-	local size = config.Size or UDim2.new(0, 680, 0, 440)
+	local titleText = config.Title or "LUX // SYSTEM"
+	local subText = config.Subtitle or "BRUTAL INTERFACE"
+	local size = config.Size or UDim2.new(0, 720, 0, 480)
+	local toggleKey = config.ToggleKey or Enum.KeyCode.RightShift
 
 	local screenGui = Instance.new("ScreenGui")
 	screenGui.Name = "LuxLib_" .. math.random(1000, 9999)
@@ -100,79 +107,148 @@ function LuxLib:CreateWindow(config)
 	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screenGui.Parent = getGuiHost()
 
+	local blurInstance = Lighting:FindFirstChild("LuxLib_Blur")
+	if not blurInstance then
+		blurInstance = Instance.new("BlurEffect")
+		blurInstance.Name = "LuxLib_Blur"
+		blurInstance.Size = 0
+		blurInstance.Parent = Lighting
+	end
+	tween(blurInstance, TWEEN_SMOOTH, { Size = 24 })
+
+	local backdrop = Instance.new("TextButton")
+	backdrop.Name = "Backdrop"
+	backdrop.Size = UDim2.new(1, 0, 1, 0)
+	backdrop.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+	backdrop.BackgroundTransparency = 1
+	backdrop.Text = ""
+	backdrop.AutoButtonColor = false
+	backdrop.Parent = screenGui
+	tween(backdrop, TWEEN_SMOOTH, { BackgroundTransparency = 0.5 })
+
 	local main = Instance.new("Frame")
 	main.Name = "Main"
 	main.Size = size
 	main.Position = UDim2.new(0.5, -size.X.Offset / 2, 0.5, -size.Y.Offset / 2)
 	main.BackgroundColor3 = Theme.Void
-	main.BackgroundTransparency = 0.08
+	main.BackgroundTransparency = 0.15
 	main.BorderSizePixel = 0
 	main.ClipsDescendants = false
 	main.Parent = screenGui
 
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 4)
-	corner.Parent = main
+	local mainScale = Instance.new("UIScale")
+	mainScale.Scale = 0.95
+	mainScale.Parent = main
+	tween(mainScale, TWEEN_BOUNCE, { Scale = 1 })
 
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = Theme.Border
-	stroke.Thickness = 1
-	stroke.Parent = main
+	local mainCorner = Instance.new("UICorner")
+	mainCorner.CornerRadius = UDim.new(0, 6)
+	mainCorner.Parent = main
+
+	local mainStroke = Instance.new("UIStroke")
+	mainStroke.Color = Theme.Border
+	mainStroke.Thickness = 1.2
+	mainStroke.Parent = main
+
+	local strokeGradient = Instance.new("UIGradient")
+	strokeGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+		ColorSequenceKeypoint.new(0.4, Color3.fromRGB(80, 80, 100)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(30, 30, 40))
+	})
+	strokeGradient.Rotation = 45
+	strokeGradient.Parent = mainStroke
+
+	local glassSheen = Instance.new("Frame")
+	glassSheen.Name = "Sheen"
+	glassSheen.Size = UDim2.new(1, 0, 0, 120)
+	glassSheen.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	glassSheen.BackgroundTransparency = 1
+	glassSheen.BorderSizePixel = 0
+	glassSheen.Parent = main
+
+	local sheenCorner = Instance.new("UICorner")
+	sheenCorner.CornerRadius = UDim.new(0, 6)
+	sheenCorner.Parent = glassSheen
+
+	local sheenGradient = Instance.new("UIGradient")
+	sheenGradient.Color = ColorSequence.new(Color3.fromRGB(255, 255, 255))
+	sheenGradient.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.95),
+		NumberSequenceKeypoint.new(1, 1)
+	})
+	sheenGradient.Rotation = 90
+	sheenGradient.Parent = glassSheen
 
 	local topbar = Instance.new("Frame")
 	topbar.Name = "Topbar"
-	topbar.Size = UDim2.new(1, 0, 0, 48)
+	topbar.Size = UDim2.new(1, 0, 0, 50)
 	topbar.BackgroundColor3 = Theme.Surface
-	topbar.BackgroundTransparency = 0.2
+	topbar.BackgroundTransparency = 0.3
 	topbar.BorderSizePixel = 0
 	topbar.Parent = main
 
 	local topbarCorner = Instance.new("UICorner")
-	topbarCorner.CornerRadius = UDim.new(0, 4)
+	topbarCorner.CornerRadius = UDim.new(0, 6)
 	topbarCorner.Parent = topbar
 
-	local topbarStroke = Instance.new("UIStroke")
-	topbarStroke.Color = Theme.Border
-	topbarStroke.Thickness = 1
-	topbarStroke.Parent = topbar
+	local topbarDivider = Instance.new("Frame")
+	topbarDivider.Size = UDim2.new(1, 0, 0, 1)
+	topbarDivider.Position = UDim2.new(0, 0, 1, -1)
+	topbarDivider.BackgroundColor3 = Theme.Border
+	topbarDivider.BorderSizePixel = 0
+	topbarDivider.Parent = topbar
 
-	local title = Instance.new("TextLabel")
-	title.Name = "Title"
-	title.Size = UDim2.new(0, 200, 1, 0)
-	title.Position = UDim2.new(0, 16, 0, 0)
-	title.BackgroundTransparency = 1
-	title.Text = string.upper(titleText)
-	title.TextColor3 = Theme.Text
-	title.TextSize = 14
-	title.TextXAlignment = Enum.TextXAlignment.Left
-	applyFont(title, Enum.FontWeight.Bold)
-	title.Parent = topbar
+	local titleLabel = Instance.new("TextLabel")
+	titleLabel.Size = UDim2.new(0, 220, 1, 0)
+	titleLabel.Position = UDim2.new(0, 18, 0, 0)
+	titleLabel.BackgroundTransparency = 1
+	titleLabel.Text = string.upper(titleText)
+	titleLabel.TextColor3 = Theme.Text
+	titleLabel.TextSize = 13
+	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+	applyFont(titleLabel, Enum.FontWeight.Bold)
+	titleLabel.Parent = topbar
 
-	local subtitle = Instance.new("TextLabel")
-	subtitle.Name = "Subtitle"
-	subtitle.Size = UDim2.new(0, 200, 1, 0)
-	subtitle.Position = UDim2.new(0, 16 + title.TextBounds.X + 12, 0, 0)
-	subtitle.BackgroundTransparency = 1
-	subtitle.Text = string.upper(subText)
-	subtitle.TextColor3 = Theme.TextMuted
-	subtitle.TextSize = 11
-	subtitle.TextXAlignment = Enum.TextXAlignment.Left
-	applyFont(subtitle, Enum.FontWeight.Medium)
-	subtitle.Parent = topbar
+	local subLabel = Instance.new("TextLabel")
+	subLabel.Size = UDim2.new(0, 220, 1, 0)
+	subLabel.Position = UDim2.new(0, 18 + titleLabel.TextBounds.X + 16, 0, 0)
+	subLabel.BackgroundTransparency = 1
+	subLabel.Text = string.upper(subText)
+	subLabel.TextColor3 = Theme.TextMuted
+	subLabel.TextSize = 11
+	subLabel.TextXAlignment = Enum.TextXAlignment.Left
+	applyFont(subLabel, Enum.FontWeight.Medium)
+	subLabel.Parent = topbar
+
+	local minBtn = Instance.new("TextButton")
+	minBtn.Size = UDim2.new(0, 28, 0, 28)
+	minBtn.Position = UDim2.new(1, -38, 0.5, -14)
+	minBtn.BackgroundColor3 = Theme.Element
+	minBtn.BorderSizePixel = 0
+	minBtn.Text = "-"
+	minBtn.TextColor3 = Theme.TextMuted
+	minBtn.TextSize = 14
+	applyFont(minBtn, Enum.FontWeight.Bold)
+	minBtn.Parent = topbar
+
+	local minCorner = Instance.new("UICorner")
+	minCorner.CornerRadius = UDim.new(0, 4)
+	minCorner.Parent = minBtn
 
 	makeDraggable(topbar, main)
 
 	local sidebar = Instance.new("Frame")
 	sidebar.Name = "Sidebar"
-	sidebar.Size = UDim2.new(0, 180, 1, -56)
-	sidebar.Position = UDim2.new(0, 8, 0, 52)
+	sidebar.Size = UDim2.new(0, 190, 1, -62)
+	sidebar.Position = UDim2.new(0, 10, 0, 56)
 	sidebar.BackgroundColor3 = Theme.Surface
-	sidebar.BackgroundTransparency = 0.3
+	sidebar.BackgroundTransparency = 0.35
 	sidebar.BorderSizePixel = 0
 	sidebar.Parent = main
 
 	local sidebarCorner = Instance.new("UICorner")
-	sidebarCorner.CornerRadius = UDim.new(0, 4)
+	sidebarCorner.CornerRadius = UDim.new(0, 5)
 	sidebarCorner.Parent = sidebar
 
 	local sidebarStroke = Instance.new("UIStroke")
@@ -180,14 +256,26 @@ function LuxLib:CreateWindow(config)
 	sidebarStroke.Thickness = 1
 	sidebarStroke.Parent = sidebar
 
+	local activePill = Instance.new("Frame")
+	activePill.Name = "ActivePill"
+	activePill.Size = UDim2.new(0, 3, 0, 20)
+	activePill.Position = UDim2.new(0, 6, 0, 0)
+	activePill.BackgroundColor3 = Theme.Accent
+	activePill.BorderSizePixel = 0
+	activePill.Visible = false
+	activePill.ZIndex = 5
+	activePill.Parent = sidebar
+
+	local activePillCorner = Instance.new("UICorner")
+	activePillCorner.CornerRadius = UDim.new(1, 0)
+	activePillCorner.Parent = activePill
+
 	local tabScroll = Instance.new("ScrollingFrame")
-	tabScroll.Name = "TabScroll"
 	tabScroll.Size = UDim2.new(1, -12, 1, -12)
 	tabScroll.Position = UDim2.new(0, 6, 0, 6)
 	tabScroll.BackgroundTransparency = 1
 	tabScroll.BorderSizePixel = 0
-	tabScroll.ScrollBarThickness = 2
-	tabScroll.ScrollBarImageColor3 = Theme.BorderLight
+	tabScroll.ScrollBarThickness = 0
 	tabScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 	tabScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	tabScroll.Parent = sidebar
@@ -197,23 +285,23 @@ function LuxLib:CreateWindow(config)
 	tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	tabLayout.Parent = tabScroll
 
-	local contentArea = Instance.new("Frame")
-	contentArea.Name = "ContentArea"
-	contentArea.Size = UDim2.new(1, -204, 1, -56)
-	contentArea.Position = UDim2.new(0, 196, 0, 52)
-	contentArea.BackgroundColor3 = Theme.Surface
-	contentArea.BackgroundTransparency = 0.3
-	contentArea.BorderSizePixel = 0
-	contentArea.Parent = main
+	local contentContainer = Instance.new("Frame")
+	contentContainer.Name = "ContentContainer"
+	contentContainer.Size = UDim2.new(1, -220, 1, -62)
+	contentContainer.Position = UDim2.new(0, 210, 0, 56)
+	contentContainer.BackgroundColor3 = Theme.Surface
+	contentContainer.BackgroundTransparency = 0.35
+	contentContainer.BorderSizePixel = 0
+	contentContainer.Parent = main
 
 	local contentCorner = Instance.new("UICorner")
-	contentCorner.CornerRadius = UDim.new(0, 4)
-	contentCorner.Parent = contentArea
+	contentCorner.CornerRadius = UDim.new(0, 5)
+	contentCorner.Parent = contentContainer
 
 	local contentStroke = Instance.new("UIStroke")
 	contentStroke.Color = Theme.Border
 	contentStroke.Thickness = 1
-	contentStroke.Parent = contentArea
+	contentStroke.Parent = contentContainer
 
 	local notifContainer = Instance.new("Frame")
 	notifContainer.Name = "Notifications"
@@ -228,107 +316,141 @@ function LuxLib:CreateWindow(config)
 	notifLayout.Padding = UDim.new(0, 8)
 	notifLayout.Parent = notifContainer
 
+	local isVisible = true
+	local function toggleVisibility()
+		isVisible = not isVisible
+		if isVisible then
+			main.Visible = true
+			tween(blurInstance, TWEEN_SMOOTH, { Size = 24 })
+			tween(backdrop, TWEEN_SMOOTH, { BackgroundTransparency = 0.5 })
+			tween(mainScale, TWEEN_BOUNCE, { Scale = 1 })
+		else
+			tween(blurInstance, TWEEN_FAST, { Size = 0 })
+			tween(backdrop, TWEEN_FAST, { BackgroundTransparency = 1 })
+			local anim = tween(mainScale, TWEEN_FAST, { Scale = 0.92 })
+			anim.Completed:Connect(function()
+				if not isVisible then
+					main.Visible = false
+				end
+			end)
+		end
+	end
+
+	minBtn.MouseButton1Click:Connect(toggleVisibility)
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if not processed and input.KeyCode == toggleKey then
+			toggleVisibility()
+		end
+	end)
+
 	local windowObj = {
 		ScreenGui = screenGui,
 		Main = main,
 		Tabs = {},
 		ActiveTab = nil,
-		NotifContainer = notifContainer
+		Blur = blurInstance
 	}
 
 	function windowObj:Notify(data)
 		data = data or {}
-		local nTitle = data.Title or "ALERT"
+		local nTitle = data.Title or "NOTIFICATION"
 		local nDesc = data.Description or ""
-		local duration = data.Duration or 3
+		local duration = data.Duration or 3.5
 
-		local item = Instance.new("Frame")
-		item.Size = UDim2.new(1, 0, 0, 54)
-		item.BackgroundColor3 = Theme.Void
-		item.BackgroundTransparency = 0.05
-		item.BorderSizePixel = 0
-		item.Position = UDim2.new(0, 0, 0, 30)
-		item.Parent = notifContainer
+		local card = Instance.new("Frame")
+		card.Size = UDim2.new(1, 0, 0, 56)
+		card.Position = UDim2.new(0, 0, 1, 40)
+		card.BackgroundColor3 = Theme.Void
+		card.BackgroundTransparency = 0.1
+		card.BorderSizePixel = 0
+		card.ClipsDescendants = true
+		card.Parent = notifContainer
 
-		local itemCorner = Instance.new("UICorner")
-		itemCorner.CornerRadius = UDim.new(0, 4)
-		itemCorner.Parent = item
+		local cardCorner = Instance.new("UICorner")
+		cardCorner.CornerRadius = UDim.new(0, 5)
+		cardCorner.Parent = card
 
-		local itemStroke = Instance.new("UIStroke")
-		itemStroke.Color = Theme.BorderLight
-		itemStroke.Thickness = 1
-		itemStroke.Parent = item
+		local cardStroke = Instance.new("UIStroke")
+		cardStroke.Color = Theme.BorderLight
+		cardStroke.Thickness = 1
+		cardStroke.Parent = card
 
-		local head = Instance.new("TextLabel")
-		head.Size = UDim2.new(1, -20, 0, 18)
-		head.Position = UDim2.new(0, 10, 0, 8)
-		head.BackgroundTransparency = 1
-		head.Text = string.upper(nTitle)
-		head.TextColor3 = Theme.Accent
-		head.TextSize = 12
-		head.TextXAlignment = Enum.TextXAlignment.Left
-		applyFont(head, Enum.FontWeight.Bold)
-		head.Parent = item
+		local titleTxt = Instance.new("TextLabel")
+		titleTxt.Size = UDim2.new(1, -24, 0, 18)
+		titleTxt.Position = UDim2.new(0, 14, 0, 9)
+		titleTxt.BackgroundTransparency = 1
+		titleTxt.Text = string.upper(nTitle)
+		titleTxt.TextColor3 = Theme.Text
+		titleTxt.TextSize = 12
+		titleTxt.TextXAlignment = Enum.TextXAlignment.Left
+		applyFont(titleTxt, Enum.FontWeight.Bold)
+		titleTxt.Parent = card
 
-		local desc = Instance.new("TextLabel")
-		desc.Size = UDim2.new(1, -20, 0, 16)
-		desc.Position = UDim2.new(0, 10, 0, 26)
-		desc.BackgroundTransparency = 1
-		desc.Text = nDesc
-		desc.TextColor3 = Theme.TextMuted
-		desc.TextSize = 11
-		desc.TextXAlignment = Enum.TextXAlignment.Left
-		applyFont(desc, Enum.FontWeight.Regular)
-		desc.Parent = item
+		local descTxt = Instance.new("TextLabel")
+		descTxt.Size = UDim2.new(1, -24, 0, 18)
+		descTxt.Position = UDim2.new(0, 14, 0, 27)
+		descTxt.BackgroundTransparency = 1
+		descTxt.Text = nDesc
+		descTxt.TextColor3 = Theme.TextMuted
+		descTxt.TextSize = 11
+		descTxt.TextXAlignment = Enum.TextXAlignment.Left
+		applyFont(descTxt, Enum.FontWeight.Medium)
+		descTxt.Parent = card
 
-		local bar = Instance.new("Frame")
-		bar.Size = UDim2.new(1, 0, 0, 2)
-		bar.Position = UDim2.new(0, 0, 1, -2)
-		bar.BackgroundColor3 = Theme.Accent
-		bar.BorderSizePixel = 0
-		bar.Parent = item
+		local timerBar = Instance.new("Frame")
+		timerBar.Size = UDim2.new(1, 0, 0, 2)
+		timerBar.Position = UDim2.new(0, 0, 1, -2)
+		timerBar.BackgroundColor3 = Theme.Accent
+		timerBar.BorderSizePixel = 0
+		timerBar.Parent = card
 
-		tween(bar, TweenInfo.new(duration, Enum.EasingStyle.Linear), { Size = UDim2.new(0, 0, 0, 2) })
+		tween(card, TWEEN_BOUNCE, { Position = UDim2.new(0, 0, 0, 0) })
+		local barAnim = tween(timerBar, TweenInfo.new(duration, Enum.EasingStyle.Linear), { Size = UDim2.new(0, 0, 0, 2) })
 
-		task.delay(duration, function()
-			local fade = tween(item, TWEEN_FAST, { BackgroundTransparency = 1 })
-			tween(itemStroke, TWEEN_FAST, { Transparency = 1 })
-			tween(head, TWEEN_FAST, { TextTransparency = 1 })
-			tween(desc, TWEEN_FAST, { TextTransparency = 1 })
-			fade.Completed:Connect(function()
-				item:Destroy()
+		card.MouseEnter:Connect(function()
+			barAnim:Pause()
+			tween(cardStroke, TWEEN_SNAP, { Color = Theme.BorderHighlight })
+		end)
+		card.MouseLeave:Connect(function()
+			barAnim:Play()
+			tween(cardStroke, TWEEN_SNAP, { Color = Theme.BorderLight })
+		end)
+
+		barAnim.Completed:Connect(function()
+			local close = tween(card, TWEEN_FAST, {
+				Position = UDim2.new(0, 0, 1, 40),
+				BackgroundTransparency = 1
+			})
+			tween(cardStroke, TWEEN_FAST, { Transparency = 1 })
+			tween(titleTxt, TWEEN_FAST, { TextTransparency = 1 })
+			tween(descTxt, TWEEN_FAST, { TextTransparency = 1 })
+			close.Completed:Connect(function()
+				card:Destroy()
 			end)
 		end)
 	end
 
 	function windowObj:CreateTab(name)
-		local tabButton = Instance.new("TextButton")
-		tabButton.Name = name .. "_Button"
-		tabButton.Size = UDim2.new(1, 0, 0, 36)
-		tabButton.BackgroundColor3 = Theme.Element
-		tabButton.BackgroundTransparency = 1
-		tabButton.BorderSizePixel = 0
-		tabButton.Text = "  " .. string.upper(name)
-		tabButton.TextColor3 = Theme.TextMuted
-		tabButton.TextSize = 12
-		tabButton.TextXAlignment = Enum.TextXAlignment.Left
-		applyFont(tabButton, Enum.FontWeight.Medium)
-		tabButton.Parent = tabScroll
+		local tabBtn = Instance.new("TextButton")
+		tabBtn.Size = UDim2.new(1, 0, 0, 36)
+		tabBtn.BackgroundColor3 = Theme.Element
+		tabBtn.BackgroundTransparency = 1
+		tabBtn.BorderSizePixel = 0
+		tabBtn.Text = "   " .. string.upper(name)
+		tabBtn.TextColor3 = Theme.TextMuted
+		tabBtn.TextSize = 12
+		tabBtn.TextXAlignment = Enum.TextXAlignment.Left
+		tabBtn.AutoButtonColor = false
+		applyFont(tabBtn, Enum.FontWeight.Medium)
+		tabBtn.Parent = tabScroll
 
 		local tabBtnCorner = Instance.new("UICorner")
 		tabBtnCorner.CornerRadius = UDim.new(0, 4)
-		tabBtnCorner.Parent = tabButton
-
-		local tabBtnStroke = Instance.new("UIStroke")
-		tabBtnStroke.Color = Theme.Border
-		tabBtnStroke.Transparency = 1
-		tabBtnStroke.Thickness = 1
-		tabBtnStroke.Parent = tabButton
+		tabBtnCorner.Parent = tabBtn
 
 		local page = Instance.new("ScrollingFrame")
-		page.Name = name .. "_Page"
-		page.Size = UDim2.new(1, -16, 1, -16)
-		page.Position = UDim2.new(0, 8, 0, 8)
+		page.Size = UDim2.new(1, -20, 1, -20)
+		page.Position = UDim2.new(0, 10, 0, 10)
 		page.BackgroundTransparency = 1
 		page.BorderSizePixel = 0
 		page.ScrollBarThickness = 2
@@ -336,7 +458,7 @@ function LuxLib:CreateWindow(config)
 		page.CanvasSize = UDim2.new(0, 0, 0, 0)
 		page.AutomaticCanvasSize = Enum.AutomaticSize.Y
 		page.Visible = false
-		page.Parent = contentArea
+		page.Parent = contentContainer
 
 		local pageLayout = Instance.new("UIListLayout")
 		pageLayout.Padding = UDim.new(0, 8)
@@ -344,49 +466,73 @@ function LuxLib:CreateWindow(config)
 		pageLayout.Parent = page
 
 		local tabData = {
-			Button = tabButton,
-			Page = page,
-			Stroke = tabBtnStroke
+			Button = tabBtn,
+			Page = page
 		}
 
-		local function activate()
+		local function selectTab()
 			for _, other in pairs(windowObj.Tabs) do
-				other.Page.Visible = false
-				tween(other.Button, TWEEN_FAST, {
-					TextColor3 = Theme.TextMuted,
-					BackgroundTransparency = 1
-				})
-				tween(other.Stroke, TWEEN_FAST, { Transparency = 1 })
+				if other ~= tabData and other.Page.Visible then
+					local oldPage = other.Page
+					local fade = tween(oldPage, TWEEN_FAST, { Position = UDim2.new(0, -10, 0, 10) })
+					fade.Completed:Connect(function()
+						oldPage.Visible = false
+					end)
+					tween(other.Button, TWEEN_FAST, {
+						TextColor3 = Theme.TextMuted,
+						BackgroundTransparency = 1
+					})
+				end
 			end
+
 			page.Visible = true
-			tween(tabButton, TWEEN_FAST, {
+			page.Position = UDim2.new(0, 20, 0, 10)
+			tween(page, TWEEN_SMOOTH, { Position = UDim2.new(0, 10, 0, 10) })
+			tween(tabBtn, TWEEN_FAST, {
 				TextColor3 = Theme.Text,
-				BackgroundTransparency = 0
+				BackgroundTransparency = 0.5
 			})
-			tween(tabBtnStroke, TWEEN_FAST, { Transparency = 0 })
+
+			activePill.Visible = true
+			tween(activePill, TWEEN_BOUNCE, {
+				Position = UDim2.new(0, 4, 0, tabBtn.Position.Y.Offset + (tabBtn.AbsolutePosition.Y - tabScroll.AbsolutePosition.Y) + 8)
+			})
 			windowObj.ActiveTab = tabData
 		end
 
-		tabButton.MouseButton1Click:Connect(activate)
+		tabBtn.MouseEnter:Connect(function()
+			if windowObj.ActiveTab ~= tabData then
+				tween(tabBtn, TWEEN_SNAP, {
+					TextColor3 = Theme.Text,
+					BackgroundTransparency = 0.8
+				})
+			end
+		end)
+		tabBtn.MouseLeave:Connect(function()
+			if windowObj.ActiveTab ~= tabData then
+				tween(tabBtn, TWEEN_SNAP, {
+					TextColor3 = Theme.TextMuted,
+					BackgroundTransparency = 1
+				})
+			end
+		end)
+		tabBtn.MouseButton1Click:Connect(selectTab)
 
 		if not windowObj.ActiveTab then
-			activate()
+			selectTab()
 		end
 
 		table.insert(windowObj.Tabs, tabData)
 
-		local tabElements = {}
+		local elements = {}
 
-		function tabElements:CreateButton(text, callback)
+		function elements:CreateButton(text, callback)
 			local btn = Instance.new("TextButton")
-			btn.Size = UDim2.new(1, 0, 0, 36)
+			btn.Size = UDim2.new(1, 0, 0, 38)
 			btn.BackgroundColor3 = Theme.Element
 			btn.BorderSizePixel = 0
 			btn.AutoButtonColor = false
-			btn.Text = string.upper(text)
-			btn.TextColor3 = Theme.Text
-			btn.TextSize = 12
-			applyFont(btn, Enum.FontWeight.Medium)
+			btn.Text = ""
 			btn.Parent = page
 
 			local bCorner = Instance.new("UICorner")
@@ -398,33 +544,48 @@ function LuxLib:CreateWindow(config)
 			bStroke.Thickness = 1
 			bStroke.Parent = btn
 
+			local bLabel = Instance.new("TextLabel")
+			bLabel.Size = UDim2.new(1, -24, 1, 0)
+			bLabel.Position = UDim2.new(0, 12, 0, 0)
+			bLabel.BackgroundTransparency = 1
+			bLabel.Text = string.upper(text)
+			bLabel.TextColor3 = Theme.Text
+			bLabel.TextSize = 12
+			applyFont(bLabel, Enum.FontWeight.Medium)
+			bLabel.Parent = btn
+
 			btn.MouseEnter:Connect(function()
-				tween(btn, TWEEN_FAST, { BackgroundColor3 = Theme.ElementHover })
-				tween(bStroke, TWEEN_FAST, { Color = Theme.BorderLight })
+				tween(btn, TWEEN_SNAP, { BackgroundColor3 = Theme.ElementHover })
+				tween(bStroke, TWEEN_SNAP, { Color = Theme.BorderLight })
+				tween(bLabel, TWEEN_SNAP, { Position = UDim2.new(0, 16, 0, 0) })
 			end)
 			btn.MouseLeave:Connect(function()
-				tween(btn, TWEEN_FAST, { BackgroundColor3 = Theme.Element })
-				tween(bStroke, TWEEN_FAST, { Color = Theme.Border })
+				tween(btn, TWEEN_SNAP, { BackgroundColor3 = Theme.Element })
+				tween(bStroke, TWEEN_SNAP, { Color = Theme.Border })
+				tween(bLabel, TWEEN_SNAP, { Position = UDim2.new(0, 12, 0, 0) })
 			end)
 			btn.MouseButton1Down:Connect(function()
-				tween(btn, TWEEN_FAST, { BackgroundColor3 = Theme.Void })
+				tween(btn, TWEEN_SNAP, { BackgroundColor3 = Theme.ElementActive })
+				tween(bLabel, TWEEN_SNAP, { TextColor3 = Theme.AccentDim })
 			end)
 			btn.MouseButton1Up:Connect(function()
-				tween(btn, TWEEN_FAST, { BackgroundColor3 = Theme.ElementHover })
+				tween(btn, TWEEN_SNAP, { BackgroundColor3 = Theme.ElementHover })
+				tween(bLabel, TWEEN_SNAP, { TextColor3 = Theme.Text })
 			end)
 			btn.MouseButton1Click:Connect(function()
 				if callback then
 					callback()
 				end
 			end)
+
 			return btn
 		end
 
-		function tabElements:CreateToggle(text, defaultState, callback)
+		function elements:CreateToggle(text, defaultState, callback)
 			local state = defaultState or false
 
 			local frame = Instance.new("TextButton")
-			frame.Size = UDim2.new(1, 0, 0, 36)
+			frame.Size = UDim2.new(1, 0, 0, 38)
 			frame.BackgroundColor3 = Theme.Element
 			frame.BorderSizePixel = 0
 			frame.AutoButtonColor = false
@@ -441,8 +602,8 @@ function LuxLib:CreateWindow(config)
 			fStroke.Parent = frame
 
 			local label = Instance.new("TextLabel")
-			label.Size = UDim2.new(1, -60, 1, 0)
-			label.Position = UDim2.new(0, 12, 0, 0)
+			label.Size = UDim2.new(1, -70, 1, 0)
+			label.Position = UDim2.new(0, 14, 0, 0)
 			label.BackgroundTransparency = 1
 			label.Text = string.upper(text)
 			label.TextColor3 = Theme.Text
@@ -452,8 +613,8 @@ function LuxLib:CreateWindow(config)
 			label.Parent = frame
 
 			local switch = Instance.new("Frame")
-			switch.Size = UDim2.new(0, 36, 0, 18)
-			switch.Position = UDim2.new(1, -48, 0.5, -9)
+			switch.Size = UDim2.new(0, 40, 0, 20)
+			switch.Position = UDim2.new(1, -52, 0.5, -10)
 			switch.BackgroundColor3 = state and Theme.Accent or Theme.Void
 			switch.BorderSizePixel = 0
 			switch.Parent = frame
@@ -463,41 +624,59 @@ function LuxLib:CreateWindow(config)
 			swCorner.Parent = switch
 
 			local swStroke = Instance.new("UIStroke")
-			swStroke.Color = Theme.BorderLight
+			swStroke.Color = state and Theme.BorderHighlight or Theme.BorderLight
 			swStroke.Thickness = 1
 			swStroke.Parent = switch
 
-			local dot = Instance.new("Frame")
-			dot.Size = UDim2.new(0, 12, 0, 12)
-			dot.Position = state and UDim2.new(1, -15, 0.5, -6) or UDim2.new(0, 3, 0.5, -6)
-			dot.BackgroundColor3 = state and Theme.Void or Theme.TextMuted
-			dot.BorderSizePixel = 0
-			dot.Parent = switch
+			local thumb = Instance.new("Frame")
+			thumb.Size = UDim2.new(0, 14, 0, 14)
+			thumb.Position = state and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
+			thumb.BackgroundColor3 = state and Theme.Void or Theme.TextMuted
+			thumb.BorderSizePixel = 0
+			thumb.Parent = switch
 
-			local dotCorner = Instance.new("UICorner")
-			dotCorner.CornerRadius = UDim.new(1, 0)
-			dotCorner.Parent = dot
+			local thCorner = Instance.new("UICorner")
+			thCorner.CornerRadius = UDim.new(1, 0)
+			thCorner.Parent = thumb
 
 			local function set(val)
 				state = val
 				if state then
 					tween(switch, TWEEN_FAST, { BackgroundColor3 = Theme.Accent })
-					tween(dot, TWEEN_FAST, {
-						Position = UDim2.new(1, -15, 0.5, -6),
+					tween(swStroke, TWEEN_FAST, { Color = Theme.BorderHighlight })
+					tween(thumb, TWEEN_SNAP, { Size = UDim2.new(0, 18, 0, 14) })
+					local slide = tween(thumb, TWEEN_FAST, {
+						Position = UDim2.new(1, -17, 0.5, -7),
 						BackgroundColor3 = Theme.Void
 					})
+					slide.Completed:Connect(function()
+						tween(thumb, TWEEN_SNAP, { Size = UDim2.new(0, 14, 0, 14) })
+					end)
 				else
 					tween(switch, TWEEN_FAST, { BackgroundColor3 = Theme.Void })
-					tween(dot, TWEEN_FAST, {
-						Position = UDim2.new(0, 3, 0.5, -6),
+					tween(swStroke, TWEEN_FAST, { Color = Theme.BorderLight })
+					tween(thumb, TWEEN_SNAP, { Size = UDim2.new(0, 18, 0, 14) })
+					local slide = tween(thumb, TWEEN_FAST, {
+						Position = UDim2.new(0, 3, 0.5, -7),
 						BackgroundColor3 = Theme.TextMuted
 					})
+					slide.Completed:Connect(function()
+						tween(thumb, TWEEN_SNAP, { Size = UDim2.new(0, 14, 0, 14) })
+					end)
 				end
 				if callback then
 					callback(state)
 				end
 			end
 
+			frame.MouseEnter:Connect(function()
+				tween(frame, TWEEN_SNAP, { BackgroundColor3 = Theme.ElementHover })
+				tween(fStroke, TWEEN_SNAP, { Color = Theme.BorderLight })
+			end)
+			frame.MouseLeave:Connect(function()
+				tween(frame, TWEEN_SNAP, { BackgroundColor3 = Theme.Element })
+				tween(fStroke, TWEEN_SNAP, { Color = Theme.Border })
+			end)
 			frame.MouseButton1Click:Connect(function()
 				set(not state)
 			end)
@@ -508,14 +687,14 @@ function LuxLib:CreateWindow(config)
 			}
 		end
 
-		function tabElements:CreateSlider(text, min, max, defaultVal, step, callback)
+		function elements:CreateSlider(text, min, max, defaultVal, step, callback)
 			min = min or 0
 			max = max or 100
 			step = step or 1
 			local value = math.clamp(defaultVal or min, min, max)
 
 			local frame = Instance.new("Frame")
-			frame.Size = UDim2.new(1, 0, 0, 48)
+			frame.Size = UDim2.new(1, 0, 0, 52)
 			frame.BackgroundColor3 = Theme.Element
 			frame.BorderSizePixel = 0
 			frame.Parent = page
@@ -530,8 +709,8 @@ function LuxLib:CreateWindow(config)
 			fStroke.Parent = frame
 
 			local label = Instance.new("TextLabel")
-			label.Size = UDim2.new(0.6, 0, 0, 20)
-			label.Position = UDim2.new(0, 12, 0, 6)
+			label.Size = UDim2.new(0.6, 0, 0, 22)
+			label.Position = UDim2.new(0, 14, 0, 6)
 			label.BackgroundTransparency = 1
 			label.Text = string.upper(text)
 			label.TextColor3 = Theme.Text
@@ -541,29 +720,28 @@ function LuxLib:CreateWindow(config)
 			label.Parent = frame
 
 			local readout = Instance.new("TextLabel")
-			readout.Size = UDim2.new(0.4, -24, 0, 20)
+			readout.Size = UDim2.new(0.4, -28, 0, 22)
 			readout.Position = UDim2.new(0.6, 0, 0, 6)
 			readout.BackgroundTransparency = 1
 			readout.Text = tostring(value)
 			readout.TextColor3 = Theme.TextMuted
 			readout.TextSize = 12
 			readout.TextXAlignment = Enum.TextXAlignment.Right
-			applyFont(readout, Enum.FontWeight.Medium)
+			applyFont(readout, Enum.FontWeight.Bold)
 			readout.Parent = frame
 
 			local track = Instance.new("TextButton")
-			track.Name = "Track"
-			track.Size = UDim2.new(1, -24, 0, 4)
-			track.Position = UDim2.new(0, 12, 1, -12)
+			track.Size = UDim2.new(1, -28, 0, 4)
+			track.Position = UDim2.new(0, 14, 1, -14)
 			track.BackgroundColor3 = Theme.Void
 			track.BorderSizePixel = 0
 			track.Text = ""
 			track.AutoButtonColor = false
 			track.Parent = frame
 
-			local trackCorner = Instance.new("UICorner")
-			trackCorner.CornerRadius = UDim.new(1, 0)
-			trackCorner.Parent = track
+			local trCorner = Instance.new("UICorner")
+			trCorner.CornerRadius = UDim.new(1, 0)
+			trCorner.Parent = track
 
 			local fill = Instance.new("Frame")
 			local initRatio = (value - min) / (max - min)
@@ -585,7 +763,7 @@ function LuxLib:CreateWindow(config)
 				stepped = math.clamp(stepped, min, max)
 				value = stepped
 				readout.Text = tostring(value)
-				fill.Size = UDim2.new((value - min) / (max - min), 0, 1, 0)
+				tween(fill, TWEEN_SNAP, { Size = UDim2.new((value - min) / (max - min), 0, 1, 0) })
 				if callback then
 					callback(value)
 				end
@@ -594,13 +772,19 @@ function LuxLib:CreateWindow(config)
 			track.InputBegan:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 					isDragging = true
+					tween(track, TWEEN_SNAP, { Size = UDim2.new(1, -28, 0, 6), Position = UDim2.new(0, 14, 1, -15) })
+					tween(readout, TWEEN_SNAP, { TextColor3 = Theme.Text })
 					updateFromInput(input)
 				end
 			end)
 
 			UserInputService.InputEnded:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-					isDragging = false
+					if isDragging then
+						isDragging = false
+						tween(track, TWEEN_SNAP, { Size = UDim2.new(1, -28, 0, 4), Position = UDim2.new(0, 14, 1, -14) })
+						tween(readout, TWEEN_SNAP, { TextColor3 = Theme.TextMuted })
+					end
 				end
 			end)
 
@@ -610,11 +794,18 @@ function LuxLib:CreateWindow(config)
 				end
 			end)
 
+			frame.MouseEnter:Connect(function()
+				tween(fStroke, TWEEN_SNAP, { Color = Theme.BorderLight })
+			end)
+			frame.MouseLeave:Connect(function()
+				tween(fStroke, TWEEN_SNAP, { Color = Theme.Border })
+			end)
+
 			return {
 				SetValue = function(v)
 					value = math.clamp(v, min, max)
 					readout.Text = tostring(value)
-					fill.Size = UDim2.new((value - min) / (max - min), 0, 1, 0)
+					tween(fill, TWEEN_FAST, { Size = UDim2.new((value - min) / (max - min), 0, 1, 0) })
 					if callback then
 						callback(value)
 					end
@@ -623,79 +814,14 @@ function LuxLib:CreateWindow(config)
 			}
 		end
 
-		function tabElements:CreateInput(text, placeholder, callback)
-			local frame = Instance.new("Frame")
-			frame.Size = UDim2.new(1, 0, 0, 36)
-			frame.BackgroundColor3 = Theme.Element
-			frame.BorderSizePixel = 0
-			frame.Parent = page
-
-			local fCorner = Instance.new("UICorner")
-			fCorner.CornerRadius = UDim.new(0, 4)
-			fCorner.Parent = frame
-
-			local fStroke = Instance.new("UIStroke")
-			fStroke.Color = Theme.Border
-			fStroke.Thickness = 1
-			fStroke.Parent = frame
-
-			local label = Instance.new("TextLabel")
-			label.Size = UDim2.new(0.4, 0, 1, 0)
-			label.Position = UDim2.new(0, 12, 0, 0)
-			label.BackgroundTransparency = 1
-			label.Text = string.upper(text)
-			label.TextColor3 = Theme.Text
-			label.TextSize = 12
-			label.TextXAlignment = Enum.TextXAlignment.Left
-			applyFont(label, Enum.FontWeight.Medium)
-			label.Parent = frame
-
-			local box = Instance.new("TextBox")
-			box.Size = UDim2.new(0.6, -20, 0, 24)
-			box.Position = UDim2.new(0.4, 8, 0.5, -12)
-			box.BackgroundColor3 = Theme.Void
-			box.BorderSizePixel = 0
-			box.Text = ""
-			box.PlaceholderText = placeholder or "ENTER TEXT..."
-			box.TextColor3 = Theme.Text
-			box.PlaceholderColor3 = Theme.TextMuted
-			box.TextSize = 11
-			box.ClearTextOnFocus = false
-			applyFont(box, Enum.FontWeight.Medium)
-			box.Parent = frame
-
-			local bCorner = Instance.new("UICorner")
-			bCorner.CornerRadius = UDim.new(0, 3)
-			bCorner.Parent = box
-
-			local bStroke = Instance.new("UIStroke")
-			bStroke.Color = Theme.Border
-			bStroke.Thickness = 1
-			bStroke.Parent = box
-
-			box.Focused:Connect(function()
-				tween(bStroke, TWEEN_FAST, { Color = Theme.BorderLight })
-			end)
-			box.FocusLost:Connect(function(enterPressed)
-				tween(bStroke, TWEEN_FAST, { Color = Theme.Border })
-				if callback then
-					callback(box.Text, enterPressed)
-				end
-			end)
-
-			return {
-				GetText = function() return box.Text end,
-				SetText = function(val) box.Text = tostring(val) end
-			}
-		end
-
-		function tabElements:CreateDropdown(text, list, defaultIndex, callback)
-			list = list or {}
-			local current = list[defaultIndex or 1] or "SELECT..."
+		function elements:CreateColorPicker(text, defaultColor, defaultAlpha, callback)
+			local currentColor = defaultColor or Color3.fromRGB(255, 255, 255)
+			local currentAlpha = defaultAlpha or 1
+			local curH, curS, curV = Color3.toHSV(currentColor)
 			local isOpen = false
 
 			local frame = Instance.new("Frame")
-			frame.Size = UDim2.new(1, 0, 0, 36)
+			frame.Size = UDim2.new(1, 0, 0, 40)
 			frame.BackgroundColor3 = Theme.Element
 			frame.BorderSizePixel = 0
 			frame.ClipsDescendants = true
@@ -711,14 +837,382 @@ function LuxLib:CreateWindow(config)
 			fStroke.Parent = frame
 
 			local headBtn = Instance.new("TextButton")
-			headBtn.Size = UDim2.new(1, 0, 0, 36)
+			headBtn.Size = UDim2.new(1, 0, 0, 40)
 			headBtn.BackgroundTransparency = 1
 			headBtn.Text = ""
 			headBtn.Parent = frame
 
 			local label = Instance.new("TextLabel")
-			label.Size = UDim2.new(0.5, 0, 0, 36)
-			label.Position = UDim2.new(0, 12, 0, 0)
+			label.Size = UDim2.new(0.6, 0, 1, 0)
+			label.Position = UDim2.new(0, 14, 0, 0)
+			label.BackgroundTransparency = 1
+			label.Text = string.upper(text)
+			label.TextColor3 = Theme.Text
+			label.TextSize = 12
+			label.TextXAlignment = Enum.TextXAlignment.Left
+			applyFont(label, Enum.FontWeight.Medium)
+			label.Parent = headBtn
+
+			local swatch = Instance.new("Frame")
+			swatch.Size = UDim2.new(0, 32, 0, 18)
+			swatch.Position = UDim2.new(1, -46, 0.5, -9)
+			swatch.BackgroundColor3 = currentColor
+			swatch.BorderSizePixel = 0
+			swatch.Parent = headBtn
+
+			local swCorner = Instance.new("UICorner")
+			swCorner.CornerRadius = UDim.new(0, 3)
+			swCorner.Parent = swatch
+
+			local swStroke = Instance.new("UIStroke")
+			swStroke.Color = Theme.BorderLight
+			swStroke.Thickness = 1
+			swStroke.Parent = swatch
+
+			local pickerArea = Instance.new("Frame")
+			pickerArea.Size = UDim2.new(1, -28, 0, 190)
+			pickerArea.Position = UDim2.new(0, 14, 0, 46)
+			pickerArea.BackgroundTransparency = 1
+			pickerArea.Parent = frame
+
+			local svBox = Instance.new("TextButton")
+			svBox.Size = UDim2.new(1, 0, 0, 110)
+			svBox.BackgroundColor3 = Color3.fromHSV(curH, 1, 1)
+			svBox.BorderSizePixel = 0
+			svBox.Text = ""
+			svBox.AutoButtonColor = false
+			svBox.ClipsDescendants = true
+			svBox.Parent = pickerArea
+
+			local svCorner = Instance.new("UICorner")
+			svCorner.CornerRadius = UDim.new(0, 4)
+			svCorner.Parent = svBox
+
+			local satGradientFrame = Instance.new("Frame")
+			satGradientFrame.Size = UDim2.new(1, 0, 1, 0)
+			satGradientFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+			satGradientFrame.BorderSizePixel = 0
+			satGradientFrame.Parent = svBox
+
+			local satGrad = Instance.new("UIGradient")
+			satGrad.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0),
+				NumberSequenceKeypoint.new(1, 1)
+			})
+			satGrad.Rotation = 0
+			satGrad.Parent = satGradientFrame
+
+			local valGradientFrame = Instance.new("Frame")
+			valGradientFrame.Size = UDim2.new(1, 0, 1, 0)
+			valGradientFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+			valGradientFrame.BorderSizePixel = 0
+			valGradientFrame.Parent = svBox
+
+			local valGrad = Instance.new("UIGradient")
+			valGrad.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 1),
+				NumberSequenceKeypoint.new(1, 0)
+			})
+			valGrad.Rotation = 90
+			valGrad.Parent = valGradientFrame
+
+			local svCursor = Instance.new("Frame")
+			svCursor.Size = UDim2.new(0, 10, 0, 10)
+			svCursor.AnchorPoint = Vector2.new(0.5, 0.5)
+			svCursor.Position = UDim2.new(curS, 0, 1 - curV, 0)
+			svCursor.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+			svCursor.BorderSizePixel = 0
+			svCursor.Parent = svBox
+
+			local curCorner = Instance.new("UICorner")
+			curCorner.CornerRadius = UDim.new(1, 0)
+			curCorner.Parent = svCursor
+
+			local curStroke = Instance.new("UIStroke")
+			curStroke.Color = Color3.fromRGB(0, 0, 0)
+			curStroke.Thickness = 1.5
+			curStroke.Parent = svCursor
+
+			local hueBar = Instance.new("TextButton")
+			hueBar.Size = UDim2.new(1, 0, 0, 14)
+			hueBar.Position = UDim2.new(0, 0, 0, 118)
+			hueBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+			hueBar.BorderSizePixel = 0
+			hueBar.Text = ""
+			hueBar.AutoButtonColor = false
+			hueBar.Parent = pickerArea
+
+			local hbCorner = Instance.new("UICorner")
+			hbCorner.CornerRadius = UDim.new(1, 0)
+			hbCorner.Parent = hueBar
+
+			local hueGrad = Instance.new("UIGradient")
+			hueGrad.Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0.00, Color3.fromRGB(255, 0, 0)),
+				ColorSequenceKeypoint.new(0.17, Color3.fromRGB(255, 255, 0)),
+				ColorSequenceKeypoint.new(0.33, Color3.fromRGB(0, 255, 0)),
+				ColorSequenceKeypoint.new(0.50, Color3.fromRGB(0, 255, 255)),
+				ColorSequenceKeypoint.new(0.67, Color3.fromRGB(0, 0, 255)),
+				ColorSequenceKeypoint.new(0.83, Color3.fromRGB(255, 0, 255)),
+				ColorSequenceKeypoint.new(1.00, Color3.fromRGB(255, 0, 0))
+			})
+			hueGrad.Parent = hueBar
+
+			local hueThumb = Instance.new("Frame")
+			hueThumb.Size = UDim2.new(0, 8, 1, 4)
+			hueThumb.AnchorPoint = Vector2.new(0.5, 0.5)
+			hueThumb.Position = UDim2.new(curH, 0, 0.5, 0)
+			hueThumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+			hueThumb.BorderSizePixel = 0
+			hueThumb.Parent = hueBar
+
+			local htCorner = Instance.new("UICorner")
+			htCorner.CornerRadius = UDim.new(1, 0)
+			htCorner.Parent = hueThumb
+
+			local htStroke = Instance.new("UIStroke")
+			htStroke.Color = Color3.fromRGB(0, 0, 0)
+			htStroke.Thickness = 1.5
+			htStroke.Parent = hueThumb
+
+			local alphaBar = Instance.new("TextButton")
+			alphaBar.Size = UDim2.new(1, 0, 0, 14)
+			alphaBar.Position = UDim2.new(0, 0, 0, 140)
+			alphaBar.BackgroundColor3 = Theme.Void
+			alphaBar.BorderSizePixel = 0
+			alphaBar.Text = ""
+			alphaBar.AutoButtonColor = false
+			alphaBar.Parent = pickerArea
+
+			local abCorner = Instance.new("UICorner")
+			abCorner.CornerRadius = UDim.new(1, 0)
+			abCorner.Parent = alphaBar
+
+			local alphaFill = Instance.new("Frame")
+			alphaFill.Size = UDim2.new(1, 0, 1, 0)
+			alphaFill.BackgroundColor3 = currentColor
+			alphaFill.BorderSizePixel = 0
+			alphaFill.Parent = alphaBar
+
+			local afCorner = Instance.new("UICorner")
+			afCorner.CornerRadius = UDim.new(1, 0)
+			afCorner.Parent = alphaFill
+
+			local alphaGrad = Instance.new("UIGradient")
+			alphaGrad.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 1),
+				NumberSequenceKeypoint.new(1, 0)
+			})
+			alphaGrad.Parent = alphaFill
+
+			local alphaThumb = Instance.new("Frame")
+			alphaThumb.Size = UDim2.new(0, 8, 1, 4)
+			alphaThumb.AnchorPoint = Vector2.new(0.5, 0.5)
+			alphaThumb.Position = UDim2.new(currentAlpha, 0, 0.5, 0)
+			alphaThumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+			alphaThumb.BorderSizePixel = 0
+			alphaThumb.Parent = alphaBar
+
+			local atCorner = Instance.new("UICorner")
+			atCorner.CornerRadius = UDim.new(1, 0)
+			atCorner.Parent = alphaThumb
+
+			local atStroke = Instance.new("UIStroke")
+			atStroke.Color = Color3.fromRGB(0, 0, 0)
+			atStroke.Thickness = 1.5
+			atStroke.Parent = alphaThumb
+
+			local infoBar = Instance.new("Frame")
+			infoBar.Size = UDim2.new(1, 0, 0, 24)
+			infoBar.Position = UDim2.new(0, 0, 0, 162)
+			infoBar.BackgroundTransparency = 1
+			infoBar.Parent = pickerArea
+
+			local hexBox = Instance.new("TextBox")
+			hexBox.Size = UDim2.new(0.4, 0, 1, 0)
+			hexBox.BackgroundColor3 = Theme.Void
+			hexBox.BorderSizePixel = 0
+			hexBox.TextColor3 = Theme.Text
+			hexBox.TextSize = 11
+			hexBox.ClearTextOnFocus = false
+			applyFont(hexBox, Enum.FontWeight.Medium)
+			hexBox.Parent = infoBar
+
+			local hexCorner = Instance.new("UICorner")
+			hexCorner.CornerRadius = UDim.new(0, 3)
+			hexCorner.Parent = hexBox
+
+			local hexStroke = Instance.new("UIStroke")
+			hexStroke.Color = Theme.Border
+			hexStroke.Thickness = 1
+			hexStroke.Parent = hexBox
+
+			local rgbaDisplay = Instance.new("TextLabel")
+			rgbaDisplay.Size = UDim2.new(0.6, -10, 1, 0)
+			rgbaDisplay.Position = UDim2.new(0.4, 10, 0, 0)
+			rgbaDisplay.BackgroundTransparency = 1
+			rgbaDisplay.TextColor3 = Theme.TextMuted
+			rgbaDisplay.TextSize = 10
+			rgbaDisplay.TextXAlignment = Enum.TextXAlignment.Right
+			applyFont(rgbaDisplay, Enum.FontWeight.Medium)
+			rgbaDisplay.Parent = infoBar
+
+			local function emitChange()
+				currentColor = Color3.fromHSV(curH, curS, curV)
+				svBox.BackgroundColor3 = Color3.fromHSV(curH, 1, 1)
+				alphaFill.BackgroundColor3 = currentColor
+				swatch.BackgroundColor3 = currentColor
+				swatch.BackgroundTransparency = 1 - currentAlpha
+
+				local rInt = math.floor(currentColor.R * 255 + 0.5)
+				local gInt = math.floor(currentColor.G * 255 + 0.5)
+				local bInt = math.floor(currentColor.B * 255 + 0.5)
+				local hex = string.format("#%02X%02X%02X", rInt, gInt, bInt)
+				hexBox.Text = hex
+				rgbaDisplay.Text = string.format("R:%d G:%d B:%d A:%d%%", rInt, gInt, bInt, math.floor(currentAlpha * 100))
+
+				if callback then
+					callback(currentColor, currentAlpha, hex)
+				end
+			end
+
+			local isDraggingSV = false
+			local isDraggingHue = false
+			local isDraggingAlpha = false
+
+			local function updateSV(input)
+				local relX = math.clamp((input.Position.X - svBox.AbsolutePosition.X) / svBox.AbsoluteSize.X, 0, 1)
+				local relY = math.clamp((input.Position.Y - svBox.AbsolutePosition.Y) / svBox.AbsoluteSize.Y, 0, 1)
+				curS = relX
+				curV = 1 - relY
+				svCursor.Position = UDim2.new(curS, 0, 1 - curV, 0)
+				emitChange()
+			end
+
+			local function updateHue(input)
+				curH = math.clamp((input.Position.X - hueBar.AbsolutePosition.X) / hueBar.AbsoluteSize.X, 0, 1)
+				hueThumb.Position = UDim2.new(curH, 0, 0.5, 0)
+				emitChange()
+			end
+
+			local function updateAlpha(input)
+				currentAlpha = math.clamp((input.Position.X - alphaBar.AbsolutePosition.X) / alphaBar.AbsoluteSize.X, 0, 1)
+				alphaThumb.Position = UDim2.new(currentAlpha, 0, 0.5, 0)
+				emitChange()
+			end
+
+			svBox.InputBegan:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+					isDraggingSV = true
+					updateSV(input)
+				end
+			end)
+
+			hueBar.InputBegan:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+					isDraggingHue = true
+					updateHue(input)
+				end
+			end)
+
+			alphaBar.InputBegan:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+					isDraggingAlpha = true
+					updateAlpha(input)
+				end
+			end)
+
+			UserInputService.InputEnded:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+					isDraggingSV = false
+					isDraggingHue = false
+					isDraggingAlpha = false
+				end
+			end)
+
+			UserInputService.InputChanged:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+					if isDraggingSV then
+						updateSV(input)
+					elseif isDraggingHue then
+						updateHue(input)
+					elseif isDraggingAlpha then
+						updateAlpha(input)
+					end
+				end
+			end)
+
+			hexBox.FocusLost:Connect(function()
+				local clean = hexBox.Text:gsub("#", "")
+				local num = tonumber(clean, 16)
+				if num and #clean == 6 then
+					local r = math.floor(num / 65536) % 256 / 255
+					local g = math.floor(num / 256) % 256 / 255
+					local b = num % 256 / 255
+					currentColor = Color3.new(r, g, b)
+					curH, curS, curV = Color3.toHSV(currentColor)
+					svCursor.Position = UDim2.new(curS, 0, 1 - curV, 0)
+					hueThumb.Position = UDim2.new(curH, 0, 0.5, 0)
+					emitChange()
+				else
+					emitChange()
+				end
+			end)
+
+			headBtn.MouseButton1Click:Connect(function()
+				isOpen = not isOpen
+				local targetH = isOpen and 246 or 40
+				tween(frame, TWEEN_SMOOTH, { Size = UDim2.new(1, 0, 0, targetH) })
+			end)
+
+			emitChange()
+
+			return {
+				SetColor = function(c, a)
+					currentColor = c or currentColor
+					currentAlpha = a or currentAlpha
+					curH, curS, curV = Color3.toHSV(currentColor)
+					svCursor.Position = UDim2.new(curS, 0, 1 - curV, 0)
+					hueThumb.Position = UDim2.new(curH, 0, 0.5, 0)
+					alphaThumb.Position = UDim2.new(currentAlpha, 0, 0.5, 0)
+					emitChange()
+				end,
+				GetColor = function()
+					return currentColor, currentAlpha
+				end
+			}
+		end
+
+		function elements:CreateDropdown(text, list, defaultIndex, callback)
+			list = list or {}
+			local current = list[defaultIndex or 1] or "SELECT..."
+			local isOpen = false
+
+			local frame = Instance.new("Frame")
+			frame.Size = UDim2.new(1, 0, 0, 38)
+			frame.BackgroundColor3 = Theme.Element
+			frame.BorderSizePixel = 0
+			frame.ClipsDescendants = true
+			frame.Parent = page
+
+			local fCorner = Instance.new("UICorner")
+			fCorner.CornerRadius = UDim.new(0, 4)
+			fCorner.Parent = frame
+
+			local fStroke = Instance.new("UIStroke")
+			fStroke.Color = Theme.Border
+			fStroke.Thickness = 1
+			fStroke.Parent = frame
+
+			local headBtn = Instance.new("TextButton")
+			headBtn.Size = UDim2.new(1, 0, 0, 38)
+			headBtn.BackgroundTransparency = 1
+			headBtn.Text = ""
+			headBtn.Parent = frame
+
+			local label = Instance.new("TextLabel")
+			label.Size = UDim2.new(0.5, 0, 1, 0)
+			label.Position = UDim2.new(0, 14, 0, 0)
 			label.BackgroundTransparency = 1
 			label.Text = string.upper(text)
 			label.TextColor3 = Theme.Text
@@ -728,7 +1222,7 @@ function LuxLib:CreateWindow(config)
 			label.Parent = headBtn
 
 			local valueDisplay = Instance.new("TextLabel")
-			valueDisplay.Size = UDim2.new(0.5, -36, 0, 36)
+			valueDisplay.Size = UDim2.new(0.5, -42, 1, 0)
 			valueDisplay.Position = UDim2.new(0.5, 0, 0, 0)
 			valueDisplay.BackgroundTransparency = 1
 			valueDisplay.Text = string.upper(tostring(current))
@@ -739,8 +1233,8 @@ function LuxLib:CreateWindow(config)
 			valueDisplay.Parent = headBtn
 
 			local arrow = Instance.new("TextLabel")
-			arrow.Size = UDim2.new(0, 20, 0, 36)
-			arrow.Position = UDim2.new(1, -28, 0, 0)
+			arrow.Size = UDim2.new(0, 24, 1, 0)
+			arrow.Position = UDim2.new(1, -30, 0, 0)
 			arrow.BackgroundTransparency = 1
 			arrow.Text = "v"
 			arrow.TextColor3 = Theme.TextMuted
@@ -749,19 +1243,19 @@ function LuxLib:CreateWindow(config)
 			arrow.Parent = headBtn
 
 			local container = Instance.new("Frame")
-			container.Size = UDim2.new(1, -16, 0, #list * 28)
-			container.Position = UDim2.new(0, 8, 0, 38)
+			container.Size = UDim2.new(1, -20, 0, #list * 30)
+			container.Position = UDim2.new(0, 10, 0, 42)
 			container.BackgroundTransparency = 1
 			container.Parent = frame
 
 			local layout = Instance.new("UIListLayout")
-			layout.Padding = UDim.new(0, 2)
+			layout.Padding = UDim.new(0, 3)
 			layout.Parent = container
 
 			local function toggle()
 				isOpen = not isOpen
-				local targetHeight = isOpen and (38 + (#list * 28) + 6) or 36
-				tween(frame, TWEEN_SMOOTH, { Size = UDim2.new(1, 0, 0, targetHeight) })
+				local targetH = isOpen and (42 + (#list * 33) + 6) or 38
+				tween(frame, TWEEN_SMOOTH, { Size = UDim2.new(1, 0, 0, targetH) })
 				tween(arrow, TWEEN_FAST, { Rotation = isOpen and 180 or 0 })
 			end
 
@@ -769,11 +1263,11 @@ function LuxLib:CreateWindow(config)
 
 			for _, opt in ipairs(list) do
 				local optBtn = Instance.new("TextButton")
-				optBtn.Size = UDim2.new(1, 0, 0, 26)
+				optBtn.Size = UDim2.new(1, 0, 0, 30)
 				optBtn.BackgroundColor3 = Theme.Void
 				optBtn.BorderSizePixel = 0
 				optBtn.AutoButtonColor = false
-				optBtn.Text = "  " .. string.upper(tostring(opt))
+				optBtn.Text = "   " .. string.upper(tostring(opt))
 				optBtn.TextColor3 = (opt == current) and Theme.Accent or Theme.TextMuted
 				optBtn.TextSize = 11
 				optBtn.TextXAlignment = Enum.TextXAlignment.Left
@@ -783,6 +1277,13 @@ function LuxLib:CreateWindow(config)
 				local optCorner = Instance.new("UICorner")
 				optCorner.CornerRadius = UDim.new(0, 3)
 				optCorner.Parent = optBtn
+
+				optBtn.MouseEnter:Connect(function()
+					tween(optBtn, TWEEN_SNAP, { BackgroundColor3 = Theme.ElementActive })
+				end)
+				optBtn.MouseLeave:Connect(function()
+					tween(optBtn, TWEEN_SNAP, { BackgroundColor3 = Theme.Void })
+				end)
 
 				optBtn.MouseButton1Click:Connect(function()
 					current = opt
@@ -805,12 +1306,12 @@ function LuxLib:CreateWindow(config)
 			}
 		end
 
-		function tabElements:CreateRadioGroup(text, options, defaultIndex, callback)
+		function elements:CreateRadioGroup(text, options, defaultIndex, callback)
 			options = options or {}
 			local selected = options[defaultIndex or 1]
 
 			local frame = Instance.new("Frame")
-			frame.Size = UDim2.new(1, 0, 0, 24 + (#options * 28))
+			frame.Size = UDim2.new(1, 0, 0, 28 + (#options * 30))
 			frame.BackgroundColor3 = Theme.Element
 			frame.BorderSizePixel = 0
 			frame.Parent = page
@@ -825,8 +1326,8 @@ function LuxLib:CreateWindow(config)
 			fStroke.Parent = frame
 
 			local label = Instance.new("TextLabel")
-			label.Size = UDim2.new(1, -24, 0, 24)
-			label.Position = UDim2.new(0, 12, 0, 2)
+			label.Size = UDim2.new(1, -28, 0, 26)
+			label.Position = UDim2.new(0, 14, 0, 4)
 			label.BackgroundTransparency = 1
 			label.Text = string.upper(text)
 			label.TextColor3 = Theme.Text
@@ -839,43 +1340,43 @@ function LuxLib:CreateWindow(config)
 
 			for i, opt in ipairs(options) do
 				local optBtn = Instance.new("TextButton")
-				optBtn.Size = UDim2.new(1, -24, 0, 24)
-				optBtn.Position = UDim2.new(0, 12, 0, 24 + (i - 1) * 26)
+				optBtn.Size = UDim2.new(1, -28, 0, 26)
+				optBtn.Position = UDim2.new(0, 14, 0, 28 + (i - 1) * 28)
 				optBtn.BackgroundTransparency = 1
 				optBtn.Text = ""
 				optBtn.Parent = frame
 
-				local dotFrame = Instance.new("Frame")
-				dotFrame.Size = UDim2.new(0, 14, 0, 14)
-				dotFrame.Position = UDim2.new(0, 0, 0.5, -7)
-				dotFrame.BackgroundColor3 = Theme.Void
-				dotFrame.BorderSizePixel = 0
-				dotFrame.Parent = optBtn
+				local ring = Instance.new("Frame")
+				ring.Size = UDim2.new(0, 16, 0, 16)
+				ring.Position = UDim2.new(0, 0, 0.5, -8)
+				ring.BackgroundColor3 = Theme.Void
+				ring.BorderSizePixel = 0
+				ring.Parent = optBtn
 
-				local dfCorner = Instance.new("UICorner")
-				dfCorner.CornerRadius = UDim.new(1, 0)
-				dfCorner.Parent = dotFrame
+				local rCorner = Instance.new("UICorner")
+				rCorner.CornerRadius = UDim.new(1, 0)
+				rCorner.Parent = ring
 
-				local dfStroke = Instance.new("UIStroke")
-				dfStroke.Color = Theme.BorderLight
-				dfStroke.Thickness = 1
-				dfStroke.Parent = dotFrame
+				local rStroke = Instance.new("UIStroke")
+				rStroke.Color = (opt == selected) and Theme.BorderHighlight or Theme.BorderLight
+				rStroke.Thickness = 1
+				rStroke.Parent = ring
 
-				local inner = Instance.new("Frame")
-				inner.Size = UDim2.new(0, 8, 0, 8)
-				inner.Position = UDim2.new(0.5, -4, 0.5, -4)
-				inner.BackgroundColor3 = Theme.Accent
-				inner.BorderSizePixel = 0
-				inner.Visible = (opt == selected)
-				inner.Parent = dotFrame
+				local dot = Instance.new("Frame")
+				dot.AnchorPoint = Vector2.new(0.5, 0.5)
+				dot.Position = UDim2.new(0.5, 0, 0.5, 0)
+				dot.Size = (opt == selected) and UDim2.new(0, 8, 0, 8) or UDim2.new(0, 0, 0, 0)
+				dot.BackgroundColor3 = Theme.Accent
+				dot.BorderSizePixel = 0
+				dot.Parent = ring
 
-				local inCorner = Instance.new("UICorner")
-				inCorner.CornerRadius = UDim.new(1, 0)
-				inCorner.Parent = inner
+				local dCorner = Instance.new("UICorner")
+				dCorner.CornerRadius = UDim.new(1, 0)
+				dCorner.Parent = dot
 
 				local optLabel = Instance.new("TextLabel")
-				optLabel.Size = UDim2.new(1, -24, 1, 0)
-				optLabel.Position = UDim2.new(0, 22, 0, 0)
+				optLabel.Size = UDim2.new(1, -26, 1, 0)
+				optLabel.Position = UDim2.new(0, 26, 0, 0)
 				optLabel.BackgroundTransparency = 1
 				optLabel.Text = string.upper(tostring(opt))
 				optLabel.TextColor3 = (opt == selected) and Theme.Text or Theme.TextMuted
@@ -884,13 +1385,20 @@ function LuxLib:CreateWindow(config)
 				applyFont(optLabel, Enum.FontWeight.Medium)
 				optLabel.Parent = optBtn
 
-				buttons[opt] = { Dot = inner, Label = optLabel }
+				buttons[opt] = { Dot = dot, Label = optLabel, Stroke = rStroke }
 
 				optBtn.MouseButton1Click:Connect(function()
 					selected = opt
 					for key, val in pairs(buttons) do
-						val.Dot.Visible = (key == selected)
-						val.Label.TextColor3 = (key == selected) and Theme.Text or Theme.TextMuted
+						if key == selected then
+							tween(val.Dot, TWEEN_BOUNCE, { Size = UDim2.new(0, 8, 0, 8) })
+							tween(val.Stroke, TWEEN_FAST, { Color = Theme.BorderHighlight })
+							tween(val.Label, TWEEN_FAST, { TextColor3 = Theme.Text })
+						else
+							tween(val.Dot, TWEEN_FAST, { Size = UDim2.new(0, 0, 0, 0) })
+							tween(val.Stroke, TWEEN_FAST, { Color = Theme.BorderLight })
+							tween(val.Label, TWEEN_FAST, { TextColor3 = Theme.TextMuted })
+						end
 					end
 					if callback then
 						callback(selected)
@@ -903,15 +1411,11 @@ function LuxLib:CreateWindow(config)
 			}
 		end
 
-		function tabElements:CreateColorPicker(text, defaultColor, callback)
-			local color = defaultColor or Color3.fromRGB(255, 255, 255)
-			local isOpen = false
-
+		function elements:CreateInput(text, placeholder, callback)
 			local frame = Instance.new("Frame")
-			frame.Size = UDim2.new(1, 0, 0, 36)
+			frame.Size = UDim2.new(1, 0, 0, 38)
 			frame.BackgroundColor3 = Theme.Element
 			frame.BorderSizePixel = 0
-			frame.ClipsDescendants = true
 			frame.Parent = page
 
 			local fCorner = Instance.new("UICorner")
@@ -923,99 +1427,64 @@ function LuxLib:CreateWindow(config)
 			fStroke.Thickness = 1
 			fStroke.Parent = frame
 
-			local headBtn = Instance.new("TextButton")
-			headBtn.Size = UDim2.new(1, 0, 0, 36)
-			headBtn.BackgroundTransparency = 1
-			headBtn.Text = ""
-			headBtn.Parent = frame
-
 			local label = Instance.new("TextLabel")
-			label.Size = UDim2.new(0.6, 0, 1, 0)
-			label.Position = UDim2.new(0, 12, 0, 0)
+			label.Size = UDim2.new(0.4, 0, 1, 0)
+			label.Position = UDim2.new(0, 14, 0, 0)
 			label.BackgroundTransparency = 1
 			label.Text = string.upper(text)
 			label.TextColor3 = Theme.Text
 			label.TextSize = 12
 			label.TextXAlignment = Enum.TextXAlignment.Left
 			applyFont(label, Enum.FontWeight.Medium)
-			label.Parent = headBtn
+			label.Parent = frame
 
-			local swatch = Instance.new("Frame")
-			swatch.Size = UDim2.new(0, 24, 0, 16)
-			swatch.Position = UDim2.new(1, -36, 0.5, -8)
-			swatch.BackgroundColor3 = color
-			swatch.BorderSizePixel = 0
-			swatch.Parent = headBtn
+			local box = Instance.new("TextBox")
+			box.Size = UDim2.new(0.6, -24, 0, 26)
+			box.Position = UDim2.new(0.4, 10, 0.5, -13)
+			box.BackgroundColor3 = Theme.Void
+			box.BorderSizePixel = 0
+			box.Text = ""
+			box.PlaceholderText = placeholder or "ENTER TEXT..."
+			box.TextColor3 = Theme.Text
+			box.PlaceholderColor3 = Theme.TextMuted
+			box.TextSize = 11
+			box.ClearTextOnFocus = false
+			applyFont(box, Enum.FontWeight.Medium)
+			box.Parent = frame
 
-			local swCorner = Instance.new("UICorner")
-			swCorner.CornerRadius = UDim.new(0, 2)
-			swCorner.Parent = swatch
+			local bCorner = Instance.new("UICorner")
+			bCorner.CornerRadius = UDim.new(0, 3)
+			bCorner.Parent = box
 
-			local swStroke = Instance.new("UIStroke")
-			swStroke.Color = Theme.BorderLight
-			swStroke.Thickness = 1
-			swStroke.Parent = swatch
+			local bStroke = Instance.new("UIStroke")
+			bStroke.Color = Theme.Border
+			bStroke.Thickness = 1
+			bStroke.Parent = box
 
-			local palette = Instance.new("Frame")
-			palette.Size = UDim2.new(1, -24, 0, 60)
-			palette.Position = UDim2.new(0, 12, 0, 40)
-			palette.BackgroundTransparency = 1
-			palette.Parent = frame
-
-			local colors = {
-				Color3.fromRGB(255, 255, 255),
-				Color3.fromRGB(244, 63, 94),
-				Color3.fromRGB(249, 115, 22),
-				Color3.fromRGB(234, 179, 8),
-				Color3.fromRGB(34, 197, 94),
-				Color3.fromRGB(59, 130, 246),
-				Color3.fromRGB(168, 85, 247),
-				Color3.fromRGB(30, 30, 35)
-			}
-
-			local grid = Instance.new("UIGridLayout")
-			grid.CellSize = UDim2.new(0, 24, 0, 24)
-			grid.CellPadding = UDim2.new(0, 8, 0, 8)
-			grid.Parent = palette
-
-			for _, c in ipairs(colors) do
-				local cBtn = Instance.new("TextButton")
-				cBtn.Size = UDim2.new(0, 24, 0, 24)
-				cBtn.BackgroundColor3 = c
-				cBtn.BorderSizePixel = 0
-				cBtn.Text = ""
-				cBtn.Parent = palette
-
-				local cCorner = Instance.new("UICorner")
-				cCorner.CornerRadius = UDim.new(0, 3)
-				cCorner.Parent = cBtn
-
-				cBtn.MouseButton1Click:Connect(function()
-					color = c
-					swatch.BackgroundColor3 = color
-					if callback then
-						callback(color)
-					end
-				end)
-			end
-
-			headBtn.MouseButton1Click:Connect(function()
-				isOpen = not isOpen
-				local targetHeight = isOpen and 108 or 36
-				tween(frame, TWEEN_SMOOTH, { Size = UDim2.new(1, 0, 0, targetHeight) })
+			box.Focused:Connect(function()
+				tween(bStroke, TWEEN_FAST, { Color = Theme.BorderHighlight })
+				tween(box, TWEEN_FAST, { BackgroundColor3 = Color3.fromRGB(4, 4, 6) })
+			end)
+			box.FocusLost:Connect(function(enterPressed)
+				tween(bStroke, TWEEN_FAST, { Color = Theme.Border })
+				tween(box, TWEEN_FAST, { BackgroundColor3 = Theme.Void })
+				if callback then
+					callback(box.Text, enterPressed)
+				end
 			end)
 
 			return {
-				GetColor = function() return color end
+				GetText = function() return box.Text end,
+				SetText = function(val) box.Text = tostring(val) end
 			}
 		end
 
-		function tabElements:CreateContextMenu(text, actions)
+		function elements:CreateContextMenu(text, actions)
 			actions = actions or {}
 			local isOpen = false
 
 			local frame = Instance.new("Frame")
-			frame.Size = UDim2.new(1, 0, 0, 36)
+			frame.Size = UDim2.new(1, 0, 0, 38)
 			frame.BackgroundColor3 = Theme.Element
 			frame.BorderSizePixel = 0
 			frame.ClipsDescendants = true
@@ -1031,14 +1500,14 @@ function LuxLib:CreateWindow(config)
 			fStroke.Parent = frame
 
 			local headBtn = Instance.new("TextButton")
-			headBtn.Size = UDim2.new(1, 0, 0, 36)
+			headBtn.Size = UDim2.new(1, 0, 0, 38)
 			headBtn.BackgroundTransparency = 1
 			headBtn.Text = ""
 			headBtn.Parent = frame
 
 			local label = Instance.new("TextLabel")
-			label.Size = UDim2.new(1, -40, 1, 0)
-			label.Position = UDim2.new(0, 12, 0, 0)
+			label.Size = UDim2.new(1, -50, 1, 0)
+			label.Position = UDim2.new(0, 14, 0, 0)
 			label.BackgroundTransparency = 1
 			label.Text = string.upper(text)
 			label.TextColor3 = Theme.Text
@@ -1048,30 +1517,31 @@ function LuxLib:CreateWindow(config)
 			label.Parent = headBtn
 
 			local dots = Instance.new("TextLabel")
-			dots.Size = UDim2.new(0, 24, 0, 36)
-			dots.Position = UDim2.new(1, -32, 0, 0)
+			dots.Size = UDim2.new(0, 30, 1, 0)
+			dots.Position = UDim2.new(1, -38, 0, 0)
 			dots.BackgroundTransparency = 1
 			dots.Text = ":::"
 			dots.TextColor3 = Theme.TextMuted
 			dots.TextSize = 14
+			applyFont(dots, Enum.FontWeight.Bold)
 			dots.Parent = headBtn
 
 			local container = Instance.new("Frame")
-			container.Size = UDim2.new(1, -24, 0, #actions * 26)
-			container.Position = UDim2.new(0, 12, 0, 38)
+			container.Size = UDim2.new(1, -24, 0, #actions * 28)
+			container.Position = UDim2.new(0, 12, 0, 42)
 			container.BackgroundTransparency = 1
 			container.Parent = frame
 
 			local layout = Instance.new("UIListLayout")
-			layout.Padding = UDim.new(0, 2)
+			layout.Padding = UDim.new(0, 3)
 			layout.Parent = container
 
 			for _, act in ipairs(actions) do
 				local actBtn = Instance.new("TextButton")
-				actBtn.Size = UDim2.new(1, 0, 0, 24)
+				actBtn.Size = UDim2.new(1, 0, 0, 26)
 				actBtn.BackgroundColor3 = Theme.Void
 				actBtn.BorderSizePixel = 0
-				actBtn.Text = "  " .. string.upper(act.Name or "ACTION")
+				actBtn.Text = "   " .. string.upper(act.Name or "ACTION")
 				actBtn.TextColor3 = Theme.TextMuted
 				actBtn.TextSize = 11
 				actBtn.TextXAlignment = Enum.TextXAlignment.Left
@@ -1083,10 +1553,10 @@ function LuxLib:CreateWindow(config)
 				actCorner.Parent = actBtn
 
 				actBtn.MouseEnter:Connect(function()
-					actBtn.TextColor3 = Theme.Text
+					tween(actBtn, TWEEN_SNAP, { BackgroundColor3 = Theme.ElementHover, TextColor3 = Theme.Text })
 				end)
 				actBtn.MouseLeave:Connect(function()
-					actBtn.TextColor3 = Theme.TextMuted
+					tween(actBtn, TWEEN_SNAP, { BackgroundColor3 = Theme.Void, TextColor3 = Theme.TextMuted })
 				end)
 				actBtn.MouseButton1Click:Connect(function()
 					if act.Callback then
@@ -1097,12 +1567,12 @@ function LuxLib:CreateWindow(config)
 
 			headBtn.MouseButton1Click:Connect(function()
 				isOpen = not isOpen
-				local targetHeight = isOpen and (38 + (#actions * 26) + 8) or 36
-				tween(frame, TWEEN_SMOOTH, { Size = UDim2.new(1, 0, 0, targetHeight) })
+				local targetH = isOpen and (44 + (#actions * 29) + 6) or 38
+				tween(frame, TWEEN_SMOOTH, { Size = UDim2.new(1, 0, 0, targetH) })
 			end)
 		end
 
-		return tabElements
+		return elements
 	end
 
 	return windowObj

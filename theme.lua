@@ -130,17 +130,6 @@ function LuxLib:CreateWindow(config)
 	end
 	tween(blurInstance, TWEEN_SMOOTH, { Size = 20 })
 
-	-- Darkened Acrylic Backdrop (Pass-Through)
-	local backdrop = Instance.new("Frame")
-	backdrop.Name = "Backdrop"
-	backdrop.Size = UDim2.new(1, 0, 1, 0)
-	backdrop.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-	backdrop.BackgroundTransparency = 1
-	backdrop.BorderSizePixel = 0
-	backdrop.Active = false -- Отключает перехват кликов
-	backdrop.Parent = screenGui
-	tween(backdrop, TWEEN_SMOOTH, { BackgroundTransparency = 0.45 })
-
 	-- Main Chassis
 	local main = Instance.new("Frame")
 	main.Name = "Main"

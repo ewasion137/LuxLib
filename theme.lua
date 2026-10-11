@@ -40,6 +40,7 @@ local Theme = {
 
 -- [ UTILITIES ]
 local function getGuiHost()
+	if gethui then return gethui() end
 	local ok, target = pcall(function() return CoreGui end)
 	if ok and target then return target end
 	return Players.LocalPlayer:WaitForChild("PlayerGui")
@@ -362,14 +363,14 @@ function LuxLib:CreateWindow(config)
 		if isVisible then
 			main.Visible = true
 			tween(blurInstance, TWEEN_SMOOTH, { Size = 20 })
-			tween(backdrop, TWEEN_SMOOTH, { BackgroundTransparency = 0.45 })
 			tween(mainScale, TWEEN_BOUNCE, { Scale = 1 })
 		else
 			tween(blurInstance, TWEEN_FAST, { Size = 0 })
-			tween(backdrop, TWEEN_FAST, { BackgroundTransparency = 1 })
 			local anim = tween(mainScale, TWEEN_FAST, { Scale = 0.92 })
 			anim.Completed:Connect(function()
-				if not isVisible then main.Visible = false end
+				if not isVisible then 
+					main.Visible = false 
+				end
 			end)
 		end
 	end
@@ -388,6 +389,15 @@ function LuxLib:CreateWindow(config)
 		ActiveTab = nil,
 		Blur = blurInstance
 	}
+
+	function windowObj:Destroy()
+		if blurInstance then
+			blurInstance:Destroy()
+		end
+		if screenGui then
+			screenGui:Destroy()
+		end
+	end
 
 	-- ==============================================================================
 	-- [ NOTIFICATIONS 2.0 (TYPE-AWARE) ]

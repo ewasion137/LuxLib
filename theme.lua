@@ -103,6 +103,45 @@ local function makeDraggable(handle, target)
 	end)
 end
 
+-- Безопасный ресайзер с ограничением минимального размера
+local function makeResizable(handle, target, minSize)
+	minSize = minSize or Vector2.new(520, 360)
+	local resizing = false
+	local dragStart, startSize
+	local moveConn, endConn
+
+	handle.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			resizing = true
+			dragStart = input.Position
+			startSize = target.AbsoluteSize
+
+			if moveConn then moveConn:Disconnect() end
+			if endConn then endConn:Disconnect() end
+
+			moveConn = UserInputService.InputChanged:Connect(function(moveInput)
+				if resizing and (moveInput.UserInputType == Enum.UserInputType.MouseMovement or moveInput.UserInputType == Enum.UserInputType.Touch) then
+					local delta = moveInput.Position - dragStart
+					local newW = math.max(minSize.X, startSize.X + delta.X)
+					local newH = math.max(minSize.Y, startSize.Y + delta.Y)
+
+					tween(target, TWEEN_SNAP, {
+						Size = UDim2.new(0, newW, 0, newH)
+					})
+				end
+			end)
+
+			endConn = UserInputService.InputEnded:Connect(function(endInput)
+				if endInput.UserInputType == Enum.UserInputType.MouseButton1 or endInput.UserInputType == Enum.UserInputType.Touch then
+					resizing = false
+					if moveConn then moveConn:Disconnect() moveConn = nil end
+					if endConn then endConn:Disconnect() endConn = nil end
+				end
+			end)
+		end
+	end)
+end
+
 -- ==============================================================================
 -- [ WINDOW ENGINE ]
 -- ==============================================================================
@@ -275,6 +314,27 @@ function LuxLib:CreateWindow(config)
 	end)
 
 	makeDraggable(topbar, main)
+	-- Resize Grip (Нижний правый угол)
+	local resizeHandle = Instance.new("TextButton")
+	resizeHandle.Name = "ResizeGrip"
+	resizeHandle.Size = UDim2.new(0, 18, 0, 18)
+	resizeHandle.Position = UDim2.new(1, -18, 1, -18)
+	resizeHandle.BackgroundTransparency = 1
+	resizeHandle.Text = "◢"
+	resizeHandle.TextColor3 = Theme.TextMuted
+	resizeHandle.TextSize = 10
+	resizeHandle.AutoButtonColor = false
+	resizeHandle.ZIndex = 8
+	resizeHandle.Parent = main
+
+	resizeHandle.MouseEnter:Connect(function()
+		tween(resizeHandle, TWEEN_SNAP, { TextColor3 = Theme.Accent })
+	end)
+	resizeHandle.MouseLeave:Connect(function()
+		tween(resizeHandle, TWEEN_SNAP, { TextColor3 = Theme.TextMuted })
+	end)
+
+	makeResizable(resizeHandle, main, config.MinSize or Vector2.new(520, 360))
 
 	-- Sidebar Layout
 	local sidebar = Instance.new("Frame")
@@ -398,6 +458,8 @@ function LuxLib:CreateWindow(config)
 			screenGui:Destroy()
 		end
 	end
+
+	
 
 	-- ==============================================================================
 	-- [ NOTIFICATIONS 2.0 (TYPE-AWARE) ]
